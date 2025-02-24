@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:photo_manager/photo_manager.dart'; // AssetEntity 型を使うため
+import 'package:photo_manager/photo_manager.dart';
 
 import '../model/photo_repository.dart';
 import '../widgets/month_calendar.dart';
@@ -13,23 +13,44 @@ class VerticalCalendarScreen extends StatefulWidget {
 
 class VerticalCalendarScreenState extends State<VerticalCalendarScreen> {
   late Future<Map<DateTime, AssetEntity>> _futureAssetsByDay;
+  final ScrollController _scrollController = ScrollController();
+  final DateTime _currentDate = DateTime.now();
+
+  List<Map<String, int>> _generateAllMonths() {
+    final List<Map<String, int>> months = [];
+    final currentYear = _currentDate.year;
+    final currentMonth = _currentDate.month;
+
+    // 過去5年分を古い順に生成（例: 2020年1月 → 2025年2月）
+    for (int year = currentYear - 5; year <= currentYear; year++) {
+      final startMonth = year == currentYear - 5 ? 1 : 1;
+      final endMonth = year == currentYear ? currentMonth : 12;
+
+      for (int month = startMonth; month <= endMonth; month++) {
+        months.add({'year': year, 'month': month});
+      }
+    }
+    return months;
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.jumpTo(
+          _scrollController.position.maxScrollExtent,
+        );
+      }
+    });
+  }
 
   @override
   void initState() {
     super.initState();
-    // 起動時に一度だけ読み込み (スクリーンショット除外、同日最初の1枚だけ)
     _futureAssetsByDay = PhotoRepository.fetchAssetsGroupedByDay();
   }
 
   @override
   Widget build(BuildContext context) {
-    // この例では 2025年1月～2月 のみを並べる
-    // 必要に応じて動的に対象月を増やす / 現在月を基準にする など柔軟に調整してください
-    final months = [
-      {"year": 2025, "month": 1},
-      {"year": 2025, "month": 2},
-    ];
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('縦スクロールカレンダー'),
@@ -45,16 +66,17 @@ class VerticalCalendarScreenState extends State<VerticalCalendarScreen> {
             return Center(child: Text('Error: ${snapshot.error}'));
           }
 
-          if (!snapshot.hasData) {
-            return const Center(child: Text('Failed to fetch photos'));
+          if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            return const Center(child: Text('写真が見つかりませんでした'));
           }
 
-          final assetsByDay = snapshot.data!;
-          if (assetsByDay.isEmpty) {
-            return const Center(child: Text('No photos found'));
+          final months = _generateAllMonths();
+          if (months.isNotEmpty) {
+            _scrollToBottom();
           }
 
           return ListView.builder(
+            controller: _scrollController,
             itemCount: months.length,
             itemBuilder: (context, index) {
               final y = months[index]["year"]!;
@@ -62,7 +84,7 @@ class VerticalCalendarScreenState extends State<VerticalCalendarScreen> {
               return MonthCalendar(
                 year: y,
                 month: m,
-                assetsByDay: assetsByDay,
+                assetsByDay: snapshot.data!,
               );
             },
           );
