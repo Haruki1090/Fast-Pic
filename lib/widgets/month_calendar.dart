@@ -9,11 +9,11 @@ class MonthCalendar extends StatelessWidget {
   final Map<DateTime, AssetEntity> assetsByDay;
 
   const MonthCalendar({
-    Key? key,
+    super.key,
     required this.year,
     required this.month,
     required this.assetsByDay,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -116,13 +116,13 @@ class MonthCalendar extends StatelessWidget {
   Widget _buildDayCell(DateTime date) {
     final asset = assetsByDay[DateTime(date.year, date.month, date.day)];
 
-    // 正方形っぽくしたいので AspectRatio=1.0 にする
+    // 縦長長方形にしたいので AspectRatio=3/4 にする
     return AspectRatio(
-      aspectRatio: 1.0,
+      aspectRatio: 3 / 4,
       child: asset != null
           ? FutureBuilder<Uint8List?>(
               future: asset.thumbnailDataWithSize(
-                100 as ThumbnailSize,
+                ThumbnailSize(128, 128),
                 quality: 80,
               ),
               builder: (context, snapshot) {
@@ -132,14 +132,20 @@ class MonthCalendar extends StatelessWidget {
                     children: [
                       // 背景にサムネ
                       Positioned.fill(
-                        child: Image.memory(
-                          snapshot.data!,
-                          fit: BoxFit.cover,
+                        child: Padding(
+                          padding: const EdgeInsets.all(3.0),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.memory(
+                              snapshot.data!,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
                         ),
                       ),
                       // 日付文字
                       Align(
-                        alignment: Alignment.topRight,
+                        alignment: Alignment.center,
                         child: Container(
                           margin: const EdgeInsets.all(4),
                           padding: const EdgeInsets.symmetric(
