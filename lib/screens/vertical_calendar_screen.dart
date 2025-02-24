@@ -5,13 +5,13 @@ import '../model/photo_repository.dart';
 import '../widgets/month_calendar.dart';
 
 class VerticalCalendarScreen extends StatefulWidget {
-  const VerticalCalendarScreen({Key? key}) : super(key: key);
+  const VerticalCalendarScreen({super.key});
 
   @override
-  _VerticalCalendarScreenState createState() => _VerticalCalendarScreenState();
+  VerticalCalendarScreenState createState() => VerticalCalendarScreenState();
 }
 
-class _VerticalCalendarScreenState extends State<VerticalCalendarScreen> {
+class VerticalCalendarScreenState extends State<VerticalCalendarScreen> {
   late Future<Map<DateTime, AssetEntity>> _futureAssetsByDay;
 
   @override
@@ -38,17 +38,20 @@ class _VerticalCalendarScreenState extends State<VerticalCalendarScreen> {
         future: _futureAssetsByDay,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            // 読み込み中
             return const Center(child: CircularProgressIndicator());
           }
+
+          if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
+          }
+
           if (!snapshot.hasData) {
-            // 何らかのエラー or データなし
-            return const Center(child: Text('写真が取得できませんでした'));
+            return const Center(child: Text('Failed to fetch photos'));
           }
 
           final assetsByDay = snapshot.data!;
           if (assetsByDay.isEmpty) {
-            return const Center(child: Text('該当する写真がありません'));
+            return const Center(child: Text('No photos found'));
           }
 
           return ListView.builder(
