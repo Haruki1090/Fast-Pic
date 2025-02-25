@@ -2,68 +2,54 @@ import 'package:photo_manager/photo_manager.dart';
 
 class PhotoRepository {
   static Future<Map<DateTime, AssetEntity>> fetchAssetsGroupedByDay() async {
-    final Map<DateTime, AssetEntity> result = {};
-
-    try {
-      final permission = await PhotoManager.requestPermissionExtend();
-      if (!permission.isAuth) {
-        print('Permission denied');
-        return {};
-      }
-
-      final List<AssetPathEntity> albums = await PhotoManager.getAssetPathList(
-        type: RequestType.image,
-      );
-
-      print('Albums count: ${albums.length}');
-
-      // フィルタリング一時無効化（デバッグ用）
-      final filteredAlbums = albums;
-      // .where((album) {
-      //   final name = album.name.toLowerCase();
-      //   return !name.contains('screenshot');
-      // }).toList();
-
-      print('Filtered albums count: ${filteredAlbums.length}');
-
-      for (final album in filteredAlbums) {
-        final assetCount = await album.assetCountAsync;
-        print('Album "${album.name}" has $assetCount assets');
-
-        if (assetCount == 0) continue;
-
-        try {
-          final assets =
-              await album.getAssetListRange(start: 0, end: assetCount);
-          print('Fetched ${assets.length} assets from "${album.name}"');
-
-          for (final asset in assets) {
-            final localDateTime = asset.createDateTime.toLocal();
-            final createdAt = DateTime(
-              localDateTime.year,
-              localDateTime.month,
-              localDateTime.day,
-            );
-
-            if (!result.containsKey(createdAt)) {
-              result[createdAt] = asset;
-            } else {
-              final existing = result[createdAt]!;
-              if (asset.createDateTime.isBefore(existing.createDateTime)) {
-                result[createdAt] = asset;
-              }
-            }
-          }
-        } catch (e) {
-          print('Error in album "${album.name}": $e');
-        }
-      }
-
-      print('Total grouped assets: ${result.length}');
-      return result;
-    } catch (e) {
-      print('Critical error in fetchAssetsGroupedByDay: $e');
+    final permission = await PhotoManager.requestPermissionExtend();
+    if (!permission.isAuth) {
+      // 権限がない場合
       return {};
     }
+
+    // 写真のみを取得
+    final List<AssetPathEntity> albums = await PhotoManager.getAssetPathList(
+      type: RequestType.image,
+    );
+
+    final Map<DateTime, AssetEntity> assetsByDay = {};
+
+    // メモリ使用量を削減するために処理を分割
+    for (final album in albums) {
+      final assetCount = await album.assetCountAsync;
+      if (assetCount == 0) continue;
+
+      // 大きなアルバムは分割して処理する（1回あたり最大100枚）
+      const int batchSize = 100;
+      int processed = 0;
+
+      while (processed < assetCount) {
+        final int fetchCount = (processed + batchSize) > assetCount
+            ? (assetCount - processed)
+            : batchSize;
+
+        final assets = await album.getAssetListRange(
+          start: processed,
+          end: processed + fetchCount,
+        );
+
+        // 各アセットをその撮影日で分類
+        for (final asset in assets) {
+          final dateTime = asset.createDateTime;
+          final dateOnly =
+              DateTime(dateTime.year, dateTime.month, dateTime.day);
+
+          // 既存のアセットがない場合のみ追加（各日1枚のみ保持）
+          if (!assetsByDay.containsKey(dateOnly)) {
+            assetsByDay[dateOnly] = asset;
+          }
+        }
+
+        processed += fetchCount;
+      }
+    }
+
+    return assetsByDay;
   }
 }
