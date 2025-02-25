@@ -188,7 +188,7 @@ class MonthCalendar extends StatelessWidget {
                           ),
                           // ガラスモーフィズム効果の日付表示
                           Align(
-                            alignment: Alignment.topLeft,
+                            alignment: Alignment.center,
                             child: Padding(
                               padding: const EdgeInsets.all(4.0),
                               child: ClipRRect(
