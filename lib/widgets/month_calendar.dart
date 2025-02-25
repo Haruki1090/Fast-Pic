@@ -68,7 +68,7 @@ class MonthCalendar extends StatelessWidget {
     }
 
     return Card(
-      margin: const EdgeInsets.all(12),
+      margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
         child: BackdropFilter(
@@ -81,12 +81,12 @@ class MonthCalendar extends StatelessWidget {
                   Border.all(color: Colors.white.withOpacity(0.5), width: 1),
             ),
             child: Padding(
-              padding: const EdgeInsets.all(12.0),
+              padding: const EdgeInsets.all(8.0),
               child: Column(
                 children: [
                   // 月のラベル
                   Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    padding: const EdgeInsets.only(top: 4, bottom: 8),
                     child: Text(
                       "$year年 $month月",
                       style: const TextStyle(
@@ -101,6 +101,7 @@ class MonthCalendar extends StatelessWidget {
                       bottom: BorderSide(color: Colors.grey.shade200),
                       horizontalInside: BorderSide(color: Colors.grey.shade100),
                     ),
+                    defaultVerticalAlignment: TableCellVerticalAlignment.middle,
                     children: calendarRows,
                   ),
                 ],
@@ -130,7 +131,7 @@ class MonthCalendar extends StatelessWidget {
         7,
         (index) => Center(
               child: Padding(
-                padding: const EdgeInsets.all(8.0),
+                padding: const EdgeInsets.all(4.0),
                 child: Text(
                   labels[index],
                   style: TextStyle(
@@ -164,11 +165,11 @@ class MonthCalendar extends StatelessWidget {
               }
             : null,
         child: Padding(
-          padding: const EdgeInsets.all(2.0),
+          padding: const EdgeInsets.all(1.0),
           child: asset != null
               ? FutureBuilder<Uint8List?>(
                   future: asset.thumbnailDataWithSize(
-                    const ThumbnailSize(128, 128),
+                    const ThumbnailSize(200, 267),
                     quality: 80,
                   ),
                   builder: (context, snapshot) {
@@ -179,10 +180,12 @@ class MonthCalendar extends StatelessWidget {
                           // 背景にサムネ
                           Positioned.fill(
                             child: ClipRRect(
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: BorderRadius.circular(8),
                               child: Image.memory(
                                 snapshot.data!,
                                 fit: BoxFit.cover,
+                                cacheWidth: 200,
+                                cacheHeight: 267,
                               ),
                             ),
                           ),
@@ -190,18 +193,18 @@ class MonthCalendar extends StatelessWidget {
                           Align(
                             alignment: Alignment.center,
                             child: Padding(
-                              padding: const EdgeInsets.all(4.0),
+                              padding: const EdgeInsets.all(2.0),
                               child: ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
+                                borderRadius: BorderRadius.circular(6),
                                 child: BackdropFilter(
                                   filter:
                                       ImageFilter.blur(sigmaX: 4, sigmaY: 4),
                                   child: Container(
                                     padding: const EdgeInsets.symmetric(
-                                        horizontal: 6, vertical: 2),
+                                        horizontal: 4, vertical: 1),
                                     decoration: BoxDecoration(
                                       color: Colors.white.withOpacity(0.3),
-                                      borderRadius: BorderRadius.circular(8),
+                                      borderRadius: BorderRadius.circular(6),
                                       border: Border.all(
                                           color: Colors.white.withOpacity(0.5),
                                           width: 0.5),
@@ -210,7 +213,7 @@ class MonthCalendar extends StatelessWidget {
                                       "${date.day}",
                                       style: const TextStyle(
                                         color: Colors.white,
-                                        fontSize: 12,
+                                        fontSize: 10,
                                         fontWeight: FontWeight.bold,
                                         shadows: [
                                           Shadow(
@@ -227,6 +230,26 @@ class MonthCalendar extends StatelessWidget {
                             ),
                           ),
                         ],
+                      );
+                    } else if (snapshot.connectionState ==
+                        ConnectionState.waiting) {
+                      return Container(
+                        decoration: BoxDecoration(
+                          color: Colors.grey[200],
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Center(
+                          child: Text(
+                            "${date.day}",
+                            style: TextStyle(
+                              color: date.weekday % 7 == 0
+                                  ? Colors.red.shade300
+                                  : date.weekday % 7 == 6
+                                      ? Colors.blue.shade300
+                                      : Colors.black54,
+                            ),
+                          ),
+                        ),
                       );
                     } else {
                       // 読み込み中など
