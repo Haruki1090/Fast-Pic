@@ -4,6 +4,8 @@ import 'package:intl/intl.dart';
 import 'dart:ui';
 import 'dart:typed_data';
 
+import '../model/settings_repository.dart';
+
 class DailyPhotosScreen extends StatefulWidget {
   final DateTime date;
   final AssetEntity? highlightedAsset;
@@ -50,6 +52,9 @@ class DailyPhotosScreenState extends State<DailyPhotosScreen> {
         return [];
       }
 
+      // スクリーンショット表示設定を取得
+      final showScreenshots = await SettingsRepository.getShowScreenshots();
+
       // 指定された日付の開始と終了
       final startTime = DateTime(
         widget.date.year,
@@ -69,24 +74,45 @@ class DailyPhotosScreenState extends State<DailyPhotosScreen> {
         ),
       );
 
-      final List<AssetEntity> allAssets = [];
-
-      for (final album in albums) {
-        final assetCount = await album.assetCountAsync;
-        if (assetCount == 0) continue;
-
-        final assets = await album.getAssetListRange(start: 0, end: assetCount);
-        allAssets.addAll(assets);
+      if (albums.isEmpty) {
+        return [];
       }
 
-      // 時間順にソート
-      allAssets.sort((a, b) => a.createDateTime.compareTo(b.createDateTime));
+      // 最初のアルバムから全ての写真を取得
+      final assets = await albums.first.getAssetListRange(
+        start: 0,
+        end: 1000, // 十分大きな数
+      );
 
-      return allAssets;
+      // スクリーンショットフィルタリング
+      final filteredAssets = assets.where((asset) {
+        if (!showScreenshots && _isScreenshot(asset)) {
+          return false;
+        }
+        return true;
+      }).toList();
+
+      // 時間順にソート（古い順）
+      filteredAssets
+          .sort((a, b) => a.createDateTime.compareTo(b.createDateTime));
+
+      return filteredAssets;
     } catch (e) {
       print('Error fetching daily assets: $e');
       return [];
     }
+  }
+
+  // スクリーンショット判定
+  bool _isScreenshot(AssetEntity asset) {
+    final String? title = asset.title?.toLowerCase();
+    if (title == null) return false;
+
+    return title.contains('screenshot') ||
+        title.contains('スクリーンショット') ||
+        title.startsWith('screen') ||
+        title.contains('capture') ||
+        title.startsWith('img_') && title.length > 20;
   }
 
   @override
