@@ -1,7 +1,9 @@
 import 'dart:typed_data';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:photo_manager/photo_manager.dart';
+import '../screens/daily_photos_screen.dart';
 
 class MonthCalendar extends StatelessWidget {
   final int year;
@@ -48,7 +50,7 @@ class MonthCalendar extends StatelessWidget {
     // 1日〜月末までループ
     for (int day = 1; day <= daysInMonth; day++) {
       final date = DateTime(year, month, day);
-      rowCells.add(_buildDayCell(date));
+      rowCells.add(_buildDayCell(context, date));
 
       // 7列埋まったら1行分として確定
       if (rowCells.length == 7) {
@@ -65,28 +67,48 @@ class MonthCalendar extends StatelessWidget {
       calendarRows.add(TableRow(children: rowCells));
     }
 
-    return Column(
-      children: [
-        // 月のラベル
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Text(
-            "$year年 $month月",
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
+    return Card(
+      margin: const EdgeInsets.all(12),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.7),
+              borderRadius: BorderRadius.circular(16),
+              border:
+                  Border.all(color: Colors.white.withOpacity(0.5), width: 1),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: Column(
+                children: [
+                  // 月のラベル
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Text(
+                      "$year年 $month月",
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  // テーブルレイアウト
+                  Table(
+                    border: TableBorder(
+                      bottom: BorderSide(color: Colors.grey.shade200),
+                      horizontalInside: BorderSide(color: Colors.grey.shade100),
+                    ),
+                    children: calendarRows,
+                  ),
+                ],
+              ),
             ),
           ),
         ),
-        // テーブルレイアウト
-        Table(
-          border: TableBorder(
-            bottom: BorderSide(color: Colors.grey.shade300),
-            horizontalInside: BorderSide(color: Colors.grey.shade200),
-          ),
-          children: calendarRows,
-        ),
-      ],
+      ),
     );
   }
 
@@ -94,86 +116,138 @@ class MonthCalendar extends StatelessWidget {
   List<Widget> _buildWeekdayHeaderCells() {
     // 日曜始まりの場合、index=0 -> 日, 1->月, 2->火, … 6->土
     const labels = ['日', '月', '火', '水', '木', '金', '土'];
-    return labels
-        .map(
-          (label) => Center(
-            child: Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Text(
-                label,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black54,
+    final colors = [
+      Colors.red.shade300, // 日曜
+      Colors.black54, // 月曜
+      Colors.black54, // 火曜
+      Colors.black54, // 水曜
+      Colors.black54, // 木曜
+      Colors.black54, // 金曜
+      Colors.blue.shade300, // 土曜
+    ];
+
+    return List.generate(
+        7,
+        (index) => Center(
+              child: Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Text(
+                  labels[index],
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: colors[index],
+                  ),
                 ),
               ),
-            ),
-          ),
-        )
-        .toList();
+            ));
   }
 
   /// 個々の日付セルを作る
-  Widget _buildDayCell(DateTime date) {
+  Widget _buildDayCell(BuildContext context, DateTime date) {
     final asset = assetsByDay[DateTime(date.year, date.month, date.day)];
 
     // 縦長長方形にしたいので AspectRatio=3/4 にする
     return AspectRatio(
       aspectRatio: 3 / 4,
-      child: asset != null
-          ? FutureBuilder<Uint8List?>(
-              future: asset.thumbnailDataWithSize(
-                ThumbnailSize(128, 128),
-                quality: 80,
-              ),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.done &&
-                    snapshot.hasData) {
-                  return Stack(
-                    children: [
-                      // 背景にサムネ
-                      Positioned.fill(
-                        child: Padding(
-                          padding: const EdgeInsets.all(3.0),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: Image.memory(
-                              snapshot.data!,
-                              fit: BoxFit.cover,
+      child: GestureDetector(
+        onTap: asset != null
+            ? () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => DailyPhotosScreen(
+                      date: date,
+                      highlightedAsset: asset,
+                    ),
+                  ),
+                );
+              }
+            : null,
+        child: Padding(
+          padding: const EdgeInsets.all(2.0),
+          child: asset != null
+              ? FutureBuilder<Uint8List?>(
+                  future: asset.thumbnailDataWithSize(
+                    const ThumbnailSize(128, 128),
+                    quality: 80,
+                  ),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.done &&
+                        snapshot.hasData) {
+                      return Stack(
+                        children: [
+                          // 背景にサムネ
+                          Positioned.fill(
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Image.memory(
+                                snapshot.data!,
+                                fit: BoxFit.cover,
+                              ),
                             ),
                           ),
-                        ),
-                      ),
-                      // 日付文字
-                      Align(
-                        alignment: Alignment.center,
-                        child: Container(
-                          margin: const EdgeInsets.all(4),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 4, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: Colors.black54,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            "${date.day}",
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
+                          // ガラスモーフィズム効果の日付表示
+                          Align(
+                            alignment: Alignment.topLeft,
+                            child: Padding(
+                              padding: const EdgeInsets.all(4.0),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: BackdropFilter(
+                                  filter:
+                                      ImageFilter.blur(sigmaX: 4, sigmaY: 4),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withOpacity(0.3),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                          color: Colors.white.withOpacity(0.5),
+                                          width: 0.5),
+                                    ),
+                                    child: Text(
+                                      "${date.day}",
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                        shadows: [
+                                          Shadow(
+                                            color: Colors.black45,
+                                            blurRadius: 2,
+                                            offset: Offset(1, 1),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
-                        ),
-                      ),
-                    ],
-                  );
-                } else {
-                  // 読み込み中など
-                  return Center(child: Text("${date.day}"));
-                }
-              },
-            )
-          : Center(
-              child: Text("${date.day}"),
-            ),
+                        ],
+                      );
+                    } else {
+                      // 読み込み中など
+                      return Center(child: Text("${date.day}"));
+                    }
+                  },
+                )
+              : Center(
+                  child: Text(
+                    "${date.day}",
+                    style: TextStyle(
+                      color: date.weekday % 7 == 0
+                          ? Colors.red.shade300
+                          : date.weekday % 7 == 6
+                              ? Colors.blue.shade300
+                              : Colors.black54,
+                    ),
+                  ),
+                ),
+        ),
+      ),
     );
   }
 }
