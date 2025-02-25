@@ -61,6 +61,7 @@ class VerticalCalendarScreenState extends State<VerticalCalendarScreen> {
     return Scaffold(
       body: ListView.builder(
         controller: _scrollController,
+        padding: EdgeInsets.zero, // パディングを削除
         itemCount: months.length,
         itemBuilder: (context, index) {
           final y = months[index]["year"]!;
