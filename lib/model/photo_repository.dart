@@ -1,4 +1,5 @@
 import 'package:photo_manager/photo_manager.dart';
+import 'settings_repository.dart';
 
 class PhotoRepository {
   static Future<Map<DateTime, AssetEntity>> fetchAssetsGroupedByDay() async {
@@ -7,6 +8,9 @@ class PhotoRepository {
       // 権限がない場合
       return {};
     }
+
+    // スクリーンショット表示設定を取得
+    final showScreenshots = await SettingsRepository.getShowScreenshots();
 
     // 写真のみを取得
     final List<AssetPathEntity> albums = await PhotoManager.getAssetPathList(
@@ -36,6 +40,11 @@ class PhotoRepository {
 
         // 各アセットをその撮影日で分類
         for (final asset in assets) {
+          // スクリーンショットをフィルタリング
+          if (!showScreenshots && _isScreenshot(asset)) {
+            continue; // スクリーンショットを表示しない設定ならスキップ
+          }
+
           final dateTime = asset.createDateTime;
           final dateOnly =
               DateTime(dateTime.year, dateTime.month, dateTime.day);
@@ -51,5 +60,19 @@ class PhotoRepository {
     }
 
     return assetsByDay;
+  }
+
+  // スクリーンショットかどうかを判定するヘルパーメソッド
+  static bool _isScreenshot(AssetEntity asset) {
+    // ファイル名に基づく判定（iOS/Androidの一般的なスクリーンショット命名規則）
+    final String? title = asset.title?.toLowerCase();
+    if (title == null) return false;
+
+    return title.contains('screenshot') ||
+        title.contains('スクリーンショット') ||
+        title.startsWith('screen') ||
+        title.contains('capture') ||
+        // iOS特有の命名パターン
+        title.startsWith('img_') && title.length > 20;
   }
 }
