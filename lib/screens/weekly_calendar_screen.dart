@@ -1,18 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:photo_manager/photo_manager.dart';
 
-import '../model/photo_repository.dart';
 import '../widgets/week_calendar.dart';
 
 class WeeklyCalendarScreen extends StatefulWidget {
-  const WeeklyCalendarScreen({super.key});
+  final Map<DateTime, AssetEntity> assetsByDay;
+
+  const WeeklyCalendarScreen({
+    super.key,
+    required this.assetsByDay,
+  });
 
   @override
   WeeklyCalendarScreenState createState() => WeeklyCalendarScreenState();
 }
 
 class WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
-  late Future<Map<DateTime, AssetEntity>> _futureAssetsByDay;
   final ScrollController _scrollController = ScrollController();
   final DateTime _currentDate = DateTime.now();
 
@@ -53,48 +56,27 @@ class WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
   @override
   void initState() {
     super.initState();
-    _futureAssetsByDay = PhotoRepository.fetchAssetsGroupedByDay();
   }
 
   @override
   Widget build(BuildContext context) {
+    final weeks = _generateWeeks();
+    if (weeks.isNotEmpty) {
+      _scrollToTop();
+    }
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('週間カレンダー'),
-      ),
-      body: FutureBuilder<Map<DateTime, AssetEntity>>(
-        future: _futureAssetsByDay,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
+      body: ListView.builder(
+        controller: _scrollController,
+        itemCount: weeks.length,
+        itemBuilder: (context, index) {
+          final startDate = weeks[index]["startDate"] as DateTime;
+          final endDate = weeks[index]["endDate"] as DateTime;
 
-          if (snapshot.hasError) {
-            return Center(child: Text('Error: ${snapshot.error}'));
-          }
-
-          if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return const Center(child: Text('写真が見つかりませんでした'));
-          }
-
-          final weeks = _generateWeeks();
-          if (weeks.isNotEmpty) {
-            _scrollToTop();
-          }
-
-          return ListView.builder(
-            controller: _scrollController,
-            itemCount: weeks.length,
-            itemBuilder: (context, index) {
-              final startDate = weeks[index]["startDate"] as DateTime;
-              final endDate = weeks[index]["endDate"] as DateTime;
-
-              return WeekCalendar(
-                startDate: startDate,
-                endDate: endDate,
-                assetsByDay: snapshot.data!,
-              );
-            },
+          return WeekCalendar(
+            startDate: startDate,
+            endDate: endDate,
+            assetsByDay: widget.assetsByDay,
           );
         },
       ),
