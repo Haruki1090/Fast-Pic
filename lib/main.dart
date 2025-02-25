@@ -5,6 +5,7 @@ import 'dart:ui';
 
 import 'screens/vertical_calendar_screen.dart';
 import 'screens/weekly_calendar_screen.dart';
+import 'screens/settings_screen.dart';
 import 'model/photo_repository.dart';
 
 void main() async {
@@ -139,7 +140,22 @@ class HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: Text(_selectedIndex == 0 ? '縦スクロールカレンダー' : '週間カレンダー'),
         actions: [
-          // 更新ボタンをAppBarに移動（目立たない位置に）
+          // 設定ボタンを追加
+          IconButton(
+            icon: const Icon(Icons.settings, size: 20),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => SettingsScreen(
+                    onSettingsChanged: _loadAssets,
+                  ),
+                ),
+              );
+            },
+            tooltip: '設定',
+          ),
+          // 更新ボタン
           IconButton(
             icon: const Icon(Icons.refresh, size: 20),
             onPressed: !_isLoading ? _loadAssets : null,
