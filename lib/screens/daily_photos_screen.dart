@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:photo_manager/photo_manager.dart';
-import 'package:photo_manager_image_provider/photo_manager_image_provider.dart';
 import 'package:intl/intl.dart';
 import 'dart:ui';
+import 'dart:typed_data';
 
 class DailyPhotosScreen extends StatefulWidget {
   final DateTime date;
@@ -169,27 +169,8 @@ class DailyPhotosScreenState extends State<DailyPhotosScreen> {
                             },
                             child: Hero(
                               tag: 'photo_${assets[_selectedIndex].id}',
-                              child: AssetEntityImage(
-                                assets[_selectedIndex],
-                                isOriginal: true,
-                                fit: BoxFit.contain,
-                                loadingBuilder:
-                                    (context, child, loadingProgress) {
-                                  if (loadingProgress == null) return child;
-                                  return Center(
-                                    child: CircularProgressIndicator(
-                                      value:
-                                          loadingProgress.expectedTotalBytes !=
-                                                  null
-                                              ? loadingProgress
-                                                      .cumulativeBytesLoaded /
-                                                  loadingProgress
-                                                      .expectedTotalBytes!
-                                              : null,
-                                    ),
-                                  );
-                                },
-                              ),
+                              child:
+                                  _buildMainImageArea(assets[_selectedIndex]),
                             ),
                           )
                         : Center(
@@ -245,67 +226,7 @@ class DailyPhotosScreenState extends State<DailyPhotosScreen> {
                                 color: Colors.white.withOpacity(0.5)),
                           ),
                         ),
-                        child: ListView.builder(
-                          controller: _scrollController,
-                          scrollDirection: Axis.horizontal,
-                          itemCount: assets.length,
-                          itemBuilder: (context, index) {
-                            final asset = assets[index];
-                            final isSelected = index == _selectedIndex;
-
-                            return GestureDetector(
-                              onTap: () {
-                                setState(() {
-                                  _selectedIndex = index;
-                                });
-                              },
-                              child: Container(
-                                width: 80,
-                                margin:
-                                    const EdgeInsets.symmetric(horizontal: 4),
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(10),
-                                  boxShadow: isSelected
-                                      ? [
-                                          BoxShadow(
-                                            color: Colors.blue.withOpacity(0.5),
-                                            blurRadius: 8,
-                                            spreadRadius: 1,
-                                          )
-                                        ]
-                                      : null,
-                                ),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(10),
-                                  child: Stack(
-                                    children: [
-                                      Positioned.fill(
-                                        child: AssetEntityImage(
-                                          asset,
-                                          isOriginal: false,
-                                          thumbnailSize:
-                                              const ThumbnailSize(200, 200),
-                                          fit: BoxFit.cover,
-                                        ),
-                                      ),
-                                      if (isSelected)
-                                        Positioned.fill(
-                                          child: Container(
-                                            decoration: BoxDecoration(
-                                              border: Border.all(
-                                                  color: Colors.blue, width: 3),
-                                              borderRadius:
-                                                  BorderRadius.circular(10),
-                                            ),
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
+                        child: _buildThumbnailGrid(assets),
                       ),
                     ),
                   ),
@@ -332,6 +253,72 @@ class DailyPhotosScreenState extends State<DailyPhotosScreen> {
             },
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildThumbnailGrid(List<AssetEntity> assets) {
+    return SizedBox(
+      height: 88,
+      child: ListView.builder(
+        controller: _scrollController,
+        scrollDirection: Axis.horizontal,
+        itemCount: assets.length,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        itemBuilder: (context, index) {
+          final asset = assets[index];
+          final isSelected = index == _selectedIndex;
+
+          return GestureDetector(
+            onTap: () {
+              setState(() {
+                _selectedIndex = index;
+              });
+            },
+            child: Container(
+              width: 80,
+              margin: const EdgeInsets.only(right: 8),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: FutureBuilder<Uint8List?>(
+                        // 小さいサムネイルに変更
+                        future: asset.thumbnailDataWithSize(
+                          const ThumbnailSize(160, 160),
+                          quality: 80,
+                        ),
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState ==
+                                  ConnectionState.done &&
+                              snapshot.hasData) {
+                            return Image.memory(
+                              snapshot.data!,
+                              fit: BoxFit.cover,
+                              cacheWidth: 160,
+                              cacheHeight: 160,
+                            );
+                          }
+                          return Container(color: Colors.grey[200]);
+                        },
+                      ),
+                    ),
+                    if (isSelected)
+                      Positioned.fill(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.blue, width: 3),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -391,5 +378,35 @@ class DailyPhotosScreenState extends State<DailyPhotosScreen> {
         curve: Curves.easeInOut,
       );
     }
+  }
+
+  Widget _buildMainImageArea(AssetEntity asset) {
+    return Expanded(
+      child: Center(
+        child: FutureBuilder<Uint8List?>(
+          future: asset.thumbnailDataWithSize(
+            // フル解像度ではなく、画面サイズに合わせた適切なサイズに
+            ThumbnailSize(
+              MediaQuery.of(context).size.width.toInt() *
+                  2, // 2倍の解像度（Retinaディスプレイ対応）
+              MediaQuery.of(context).size.height.toInt() * 2,
+            ),
+            quality: 90,
+          ),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.done &&
+                snapshot.hasData) {
+              return Image.memory(
+                snapshot.data!,
+                fit: BoxFit.contain,
+              );
+            }
+            return const Center(
+              child: CircularProgressIndicator(),
+            );
+          },
+        ),
+      ),
+    );
   }
 }
