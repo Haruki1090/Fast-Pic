@@ -2,6 +2,9 @@ import 'package:photo_manager/photo_manager.dart';
 import 'settings_repository.dart';
 
 class PhotoRepository {
+  // スクリーンショット判定結果のキャッシュ
+  static final Map<String, bool> _screenshotCache = {};
+
   static Future<Map<DateTime, AssetEntity>> fetchAssetsGroupedByDay() async {
     final permission = await PhotoManager.requestPermissionExtend();
     if (!permission.isAuth) {
@@ -21,11 +24,19 @@ class PhotoRepository {
 
     // メモリ使用量を削減するために処理を分割
     for (final album in albums) {
+      // スクリーンショットのアルバム判定（軽量処理）
+      final isScreenshotAlbum = _isScreenshotAlbum(album);
+
+      // スクリーンショットを表示しない設定で、スクリーンショットアルバムならスキップ
+      if (!showScreenshots && isScreenshotAlbum) {
+        continue;
+      }
+
       final assetCount = await album.assetCountAsync;
       if (assetCount == 0) continue;
 
-      // 大きなアルバムは分割して処理する（1回あたり最大100枚）
-      const int batchSize = 100;
+      // 大きなアルバムは分割して処理する（1回あたり最大50枚に削減）
+      const int batchSize = 50;
       int processed = 0;
 
       while (processed < assetCount) {
@@ -41,8 +52,16 @@ class PhotoRepository {
         // 各アセットをその撮影日で分類
         for (final asset in assets) {
           // スクリーンショットをフィルタリング
-          if (!showScreenshots && _isScreenshot(asset)) {
-            continue; // スクリーンショットを表示しない設定ならスキップ
+          if (!showScreenshots) {
+            // アルバムがスクリーンショットアルバムなら自動的にスキップ
+            if (isScreenshotAlbum) {
+              continue;
+            }
+
+            // 個別の写真判定（軽量バージョン）
+            if (await _isScreenshotAssetLightweight(asset)) {
+              continue;
+            }
           }
 
           final dateTime = asset.createDateTime;
@@ -55,6 +74,11 @@ class PhotoRepository {
           }
         }
 
+        // バッチ処理後にキャッシュを整理
+        if (_screenshotCache.length > 1000) {
+          _screenshotCache.clear();
+        }
+
         processed += fetchCount;
       }
     }
@@ -62,17 +86,59 @@ class PhotoRepository {
     return assetsByDay;
   }
 
-  // スクリーンショットかどうかを判定するヘルパーメソッド
-  static bool _isScreenshot(AssetEntity asset) {
-    // ファイル名に基づく判定（iOS/Androidの一般的なスクリーンショット命名規則）
-    final String? title = asset.title?.toLowerCase();
-    if (title == null) return false;
+  // アルバム名からスクリーンショットアルバムかどうかを判定（軽量処理）
+  static bool _isScreenshotAlbum(AssetPathEntity album) {
+    final String albumName = album.name.toLowerCase();
+    return albumName.contains('スクリーンショット') ||
+        albumName.contains('screenshot') ||
+        albumName.contains('screen shot');
+  }
 
-    return title.contains('screenshot') ||
-        title.contains('スクリーンショット') ||
-        title.startsWith('screen') ||
-        title.contains('capture') ||
-        // iOS特有の命名パターン
-        title.startsWith('img_') && title.length > 20;
+  // 軽量なスクリーンショット判定（ファイル名と基本属性のみ）
+  static Future<bool> _isScreenshotAssetLightweight(AssetEntity asset) async {
+    // キャッシュをチェック
+    if (_screenshotCache.containsKey(asset.id)) {
+      return _screenshotCache[asset.id]!;
+    }
+
+    bool isScreenshot = false;
+
+    // 1. ファイル名による判定（基本的な判定・軽量）
+    final String? title = asset.title?.toLowerCase();
+    if (title != null) {
+      if (title.contains('screenshot') ||
+          title.contains('スクリーンショット') ||
+          title.startsWith('screen') ||
+          title.contains('capture')) {
+        _screenshotCache[asset.id] = true;
+        return true;
+      }
+    }
+
+    // 2. iOS標準のスクリーンショットサイズによる判定（軽量）
+    // 特定の解像度はスクリーンショットの可能性が高い
+    if (asset.width == 1170 || // iPhone 12/13 サイズ
+        asset.width == 1284 || // iPhone 12/13 Pro Max サイズ
+        asset.width == 1080 || // iPhone 11 サイズ
+        asset.width == 1125) {
+      // iPhone X/XS/11 Pro サイズ
+      _screenshotCache[asset.id] = true;
+      return true;
+    }
+
+    // 3. 関連属性による軽量判定
+    // iOSのスクリーンショットはGPS情報が含まれない
+    if (asset.latitude == 0 && asset.longitude == 0) {
+      // さらにExifの特別な属性が欠落していることが多い
+      final String? mimeType = asset.mimeType?.toLowerCase();
+      // スクリーンショットは通常PNG形式
+      if (mimeType != null && mimeType.contains('png')) {
+        isScreenshot = true;
+      }
+    }
+
+    // キャッシュに保存
+    _screenshotCache[asset.id] = isScreenshot;
+    return isScreenshot;
   }
 }
