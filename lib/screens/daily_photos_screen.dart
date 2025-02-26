@@ -25,6 +25,9 @@ class DailyPhotosScreenState extends State<DailyPhotosScreen> {
   final ScrollController _scrollController = ScrollController();
   int _selectedIndex = -1;
 
+  // スクリーンショット判定結果のキャッシュ
+  final Map<String, bool> _screenshotCache = {};
+
   @override
   void initState() {
     super.initState();
@@ -78,41 +81,126 @@ class DailyPhotosScreenState extends State<DailyPhotosScreen> {
         return [];
       }
 
-      // 最初のアルバムから全ての写真を取得
-      final assets = await albums.first.getAssetListRange(
-        start: 0,
-        end: 1000, // 十分大きな数
-      );
+      final List<AssetEntity> allAssets = [];
 
-      // スクリーンショットフィルタリング
-      final filteredAssets = assets.where((asset) {
-        if (!showScreenshots && _isScreenshot(asset)) {
-          return false;
+      // スクリーンショットアルバムを除外またはリストに含めるか
+      for (final album in albums) {
+        // スクリーンショットアルバムを判定（軽量判定）
+        final isScreenshotAlbum = _isScreenshotAlbum(album);
+
+        // スクリーンショットを表示しない設定で、スクリーンショットアルバムならスキップ
+        if (!showScreenshots && isScreenshotAlbum) {
+          continue;
         }
-        return true;
-      }).toList();
+
+        // アルバムから全ての写真を取得
+        final int assetCount = await album.assetCountAsync;
+        if (assetCount == 0) continue;
+
+        // 大きなアルバムは分割して処理（メモリ最適化）
+        const int batchSize = 50;
+        int processed = 0;
+
+        while (processed < assetCount) {
+          final int fetchCount = (processed + batchSize) > assetCount
+              ? (assetCount - processed)
+              : batchSize;
+
+          final assets = await album.getAssetListRange(
+            start: processed,
+            end: processed + fetchCount,
+          );
+
+          if (!showScreenshots) {
+            // スクリーンショットアルバムでなければ個別判定
+            if (!isScreenshotAlbum) {
+              for (final asset in assets) {
+                if (!await _isScreenshotAssetLightweight(asset)) {
+                  allAssets.add(asset);
+                }
+              }
+            }
+            // スクリーンショットアルバムなら全てスキップ
+          } else {
+            // 全ての写真を追加
+            allAssets.addAll(assets);
+          }
+
+          processed += fetchCount;
+        }
+      }
+
+      // 重複を除去（同じIDの写真は1つだけにする）
+      final Map<String, AssetEntity> uniqueAssets = {};
+      for (final asset in allAssets) {
+        uniqueAssets[asset.id] = asset;
+      }
 
       // 時間順にソート（古い順）
-      filteredAssets
-          .sort((a, b) => a.createDateTime.compareTo(b.createDateTime));
+      final List<AssetEntity> sortedAssets = uniqueAssets.values.toList()
+        ..sort((a, b) => a.createDateTime.compareTo(b.createDateTime));
 
-      return filteredAssets;
+      return sortedAssets;
     } catch (e) {
       print('Error fetching daily assets: $e');
       return [];
     }
   }
 
-  // スクリーンショット判定
-  bool _isScreenshot(AssetEntity asset) {
-    final String? title = asset.title?.toLowerCase();
-    if (title == null) return false;
+  // アルバム名からスクリーンショットアルバムかどうかを判定（軽量処理）
+  bool _isScreenshotAlbum(AssetPathEntity album) {
+    final String albumName = album.name.toLowerCase();
+    return albumName.contains('スクリーンショット') ||
+        albumName.contains('screenshot') ||
+        albumName.contains('screen shot');
+  }
 
-    return title.contains('screenshot') ||
-        title.contains('スクリーンショット') ||
-        title.startsWith('screen') ||
-        title.contains('capture') ||
-        title.startsWith('img_') && title.length > 20;
+  // 軽量なスクリーンショット判定（ファイル名と基本属性のみ）
+  Future<bool> _isScreenshotAssetLightweight(AssetEntity asset) async {
+    // キャッシュをチェック
+    if (_screenshotCache.containsKey(asset.id)) {
+      return _screenshotCache[asset.id]!;
+    }
+
+    bool isScreenshot = false;
+
+    // 1. ファイル名による判定（基本的な判定・軽量）
+    final String? title = asset.title?.toLowerCase();
+    if (title != null) {
+      if (title.contains('screenshot') ||
+          title.contains('スクリーンショット') ||
+          title.startsWith('screen') ||
+          title.contains('capture')) {
+        _screenshotCache[asset.id] = true;
+        return true;
+      }
+    }
+
+    // 2. iOS標準のスクリーンショットサイズによる判定（軽量）
+    // 特定の解像度はスクリーンショットの可能性が高い
+    if (asset.width == 1170 || // iPhone 12/13 サイズ
+        asset.width == 1284 || // iPhone 12/13 Pro Max サイズ
+        asset.width == 1080 || // iPhone 11 サイズ
+        asset.width == 1125) {
+      // iPhone X/XS/11 Pro サイズ
+      _screenshotCache[asset.id] = true;
+      return true;
+    }
+
+    // 3. 関連属性による軽量判定
+    // iOSのスクリーンショットはGPS情報が含まれない
+    if (asset.latitude == 0 && asset.longitude == 0) {
+      // さらにExifの特別な属性が欠落していることが多い
+      final String? mimeType = asset.mimeType?.toLowerCase();
+      // スクリーンショットは通常PNG形式
+      if (mimeType != null && mimeType.contains('png')) {
+        isScreenshot = true;
+      }
+    }
+
+    // キャッシュに保存
+    _screenshotCache[asset.id] = isScreenshot;
+    return isScreenshot;
   }
 
   @override
