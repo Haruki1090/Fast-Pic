@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:photo_manager/photo_manager.dart';
+import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'dart:ui';
 
@@ -59,79 +60,81 @@ class HomeScreenState extends State<HomeScreen> {
   late Future<Map<DateTime, AssetEntity>> _futureAssetsByDay;
   Map<DateTime, AssetEntity>? _assetsByDay;
   bool _isLoading = true;
+  bool _isRefreshing = false;
+  bool _showScreenshotsChanging = false;
 
   @override
   void initState() {
     super.initState();
+    initializeDateFormatting('ja_JP');
     _loadAssets();
   }
 
   Future<void> _loadAssets() async {
     setState(() {
       _isLoading = true;
+      _isRefreshing = true;
     });
 
     try {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('写真を読み込み中です。スクリーンショットのフィルタリングに時間がかかる場合があります...'),
+          duration: Duration(seconds: 3),
+        ),
+      );
+
       _futureAssetsByDay = PhotoRepository.fetchAssetsGroupedByDay();
-      _assetsByDay = await _futureAssetsByDay;
+      final assetsByDay = await _futureAssetsByDay;
+
+      if (mounted) {
+        setState(() {
+          _assetsByDay = assetsByDay;
+          _isLoading = false;
+          _isRefreshing = false;
+          _showScreenshotsChanging = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('写真の読み込みが完了しました'),
+            duration: Duration(seconds: 2),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
     } catch (e) {
-      print('Error loading assets: $e');
-    } finally {
       if (mounted) {
         setState(() {
           _isLoading = false;
+          _isRefreshing = false;
+          _showScreenshotsChanging = false;
         });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('写真の読み込み中にエラーが発生しました: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
+        );
       }
     }
   }
 
-  void _onItemTapped(int index) {
+  Future<void> _reloadAssetsAfterSettingsChange() async {
     setState(() {
-      _selectedIndex = index;
+      _showScreenshotsChanging = true;
     });
-  }
 
-  Widget _buildCurrentScreen() {
-    if (_isLoading) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('写真をロード中...'),
-          ],
-        ),
-      );
-    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('設定を適用中です。スクリーンショットのフィルタリングを更新しています...'),
+        duration: Duration(seconds: 3),
+      ),
+    );
 
-    if (_assetsByDay == null || _assetsByDay!.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.photo_album_outlined,
-                size: 64, color: Colors.grey),
-            const SizedBox(height: 16),
-            const Text('写真が見つかりませんでした'),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: _loadAssets,
-              child: const Text('再読み込み'),
-            ),
-          ],
-        ),
-      );
-    }
-
-    switch (_selectedIndex) {
-      case 0:
-        return VerticalCalendarScreen(assetsByDay: _assetsByDay!);
-      case 1:
-        return WeeklyCalendarScreen(assetsByDay: _assetsByDay!);
-      default:
-        return const SizedBox.shrink();
-    }
+    await _loadAssets();
   }
 
   @override
@@ -140,74 +143,112 @@ class HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: Text(_selectedIndex == 0 ? '縦スクロールカレンダー' : '週間カレンダー'),
         actions: [
-          // 設定ボタンを追加
           IconButton(
             icon: const Icon(Icons.settings, size: 20),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => SettingsScreen(
-                    onSettingsChanged: _loadAssets,
-                  ),
-                ),
-              );
-            },
+            onPressed: !_isRefreshing && !_showScreenshotsChanging
+                ? () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => SettingsScreen(
+                          onSettingsChanged: _reloadAssetsAfterSettingsChange,
+                        ),
+                      ),
+                    );
+                  }
+                : null,
             tooltip: '設定',
           ),
-          // 更新ボタン
-          IconButton(
-            icon: const Icon(Icons.refresh, size: 20),
-            onPressed: !_isLoading ? _loadAssets : null,
-            tooltip: '写真を更新',
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.refresh, size: 20),
+                onPressed: !_isRefreshing && !_showScreenshotsChanging
+                    ? _loadAssets
+                    : null,
+                tooltip: '写真を更新',
+              ),
+              if (_isRefreshing || _showScreenshotsChanging)
+                const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                ),
+            ],
           ),
+          const SizedBox(width: 8),
         ],
       ),
-      body: Stack(
-        children: [
-          // 背景にわずかなグラデーション効果
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Colors.white, Color(0xFFF5F9FF)],
-              ),
-            ),
+      body: _isLoading ? _buildLoadingScreen() : _buildCalendarScreen(),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _selectedIndex,
+        onTap: (index) {
+          setState(() {
+            _selectedIndex = index;
+          });
+        },
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.calendar_month),
+            label: '月表示',
           ),
-          // メインコンテンツ
-          _buildCurrentScreen(),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.view_week),
+            label: '週表示',
+          ),
         ],
-      ),
-      bottomNavigationBar: ClipRRect(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.7),
-              border: Border(
-                top: BorderSide(color: Colors.grey.withOpacity(0.2)),
-              ),
-            ),
-            child: BottomNavigationBar(
-              backgroundColor: Colors.transparent,
-              elevation: 0,
-              items: const <BottomNavigationBarItem>[
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.calendar_view_month),
-                  label: '月表示',
-                ),
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.calendar_view_week),
-                  label: '週表示',
-                ),
-              ],
-              currentIndex: _selectedIndex,
-              onTap: _onItemTapped,
-            ),
-          ),
-        ),
       ),
     );
+  }
+
+  Widget _buildLoadingScreen() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const CircularProgressIndicator(),
+          const SizedBox(height: 16),
+          Text(
+            _showScreenshotsChanging
+                ? 'スクリーンショット設定を適用中...\nフィルタリングには時間がかかる場合があります'
+                : '写真を読み込み中...',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 16,
+              color: Colors.grey,
+            ),
+          ),
+          if (_isRefreshing || _showScreenshotsChanging)
+            Padding(
+              padding:
+                  const EdgeInsets.only(top: 24.0, left: 32.0, right: 32.0),
+              child: LinearProgressIndicator(
+                backgroundColor: Colors.grey[200],
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.blue[300]!),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCalendarScreen() {
+    if (_assetsByDay == null) {
+      return const Center(child: Text('写真を読み込めませんでした。\n更新ボタンを押してください。'));
+    }
+
+    if (_assetsByDay!.isEmpty) {
+      return const Center(child: Text('表示できる写真がありません'));
+    }
+
+    if (_selectedIndex == 0) {
+      return VerticalCalendarScreen(assetsByDay: _assetsByDay!);
+    } else {
+      return WeeklyCalendarScreen(assetsByDay: _assetsByDay!);
+    }
   }
 }
