@@ -3,7 +3,7 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:photo_manager/photo_manager.dart';
-import '../screens/daily_photos_screen.dart';
+import '../widgets/glass_photo_bottom_sheet.dart';
 
 class MonthCalendar extends StatelessWidget {
   final int year;
@@ -153,14 +153,10 @@ class MonthCalendar extends StatelessWidget {
       child: GestureDetector(
         onTap: asset != null
             ? () {
-                Navigator.push(
+                showDailyPhotosBottomSheet(
                   context,
-                  MaterialPageRoute(
-                    builder: (context) => DailyPhotosScreen(
-                      date: date,
-                      highlightedAsset: asset,
-                    ),
-                  ),
+                  date,
+                  asset,
                 );
               }
             : null,

@@ -4,7 +4,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:intl/intl.dart';
-import '../screens/daily_photos_screen.dart';
+import '../widgets/glass_photo_bottom_sheet.dart';
 
 class WeekCalendar extends StatelessWidget {
   final DateTime startDate;
@@ -125,15 +125,10 @@ class WeekCalendar extends StatelessWidget {
                                 child: GestureDetector(
                                   onTap: asset != null
                                       ? () {
-                                          Navigator.push(
+                                          showDailyPhotosBottomSheet(
                                             context,
-                                            MaterialPageRoute(
-                                              builder: (context) =>
-                                                  DailyPhotosScreen(
-                                                date: date,
-                                                highlightedAsset: asset,
-                                              ),
-                                            ),
+                                            date,
+                                            asset,
                                           );
                                         }
                                       : null,

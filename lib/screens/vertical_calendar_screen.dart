@@ -5,10 +5,12 @@ import '../widgets/month_calendar.dart';
 
 class VerticalCalendarScreen extends StatefulWidget {
   final Map<DateTime, AssetEntity> assetsByDay;
+  final ScrollController scrollController;
 
   const VerticalCalendarScreen({
     super.key,
     required this.assetsByDay,
+    required this.scrollController,
   });
 
   @override

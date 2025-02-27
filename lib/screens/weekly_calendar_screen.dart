@@ -5,10 +5,12 @@ import '../widgets/week_calendar.dart';
 
 class WeeklyCalendarScreen extends StatefulWidget {
   final Map<DateTime, AssetEntity> assetsByDay;
+  final ScrollController scrollController;
 
   const WeeklyCalendarScreen({
     super.key,
     required this.assetsByDay,
+    required this.scrollController,
   });
 
   @override
