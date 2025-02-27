@@ -19,6 +19,8 @@ dependencies:
   photo_manager_image_provider:
   shared_preferences: ^2.5.2
   google_maps_flutter: ^2.10.1
+  geolocator: ^13.0.2
+  flutter_cache_manager: ^3.4.1
 
 dev_dependencies:
   flutter_test:
